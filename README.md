@@ -104,7 +104,7 @@ In the terminal, **▲/▼** expands and collapses it. The `[-]` next to it is C
 
 ## Install
 
-Needs a recent Claude Code, signed in with a **Pro or Max** plan.
+Needs a recent Claude Code, signed in with any Claude plan: **Pro, Max, Team or Enterprise**. On a login with no 5 hour or weekly limits (an API key, a gateway, a plan billed by usage) the band says so and still shows your context window and Compact.
 
 **Desktop app:** in the **Code** tab, send this as a message, allow the `claude plugin` command if asked, then **quit and reopen** the app:
 

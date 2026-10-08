@@ -12,6 +12,8 @@ export type Snapshot = {
   limitsAt?: number
   /** why the usage service last refused, while it is backed off */
   limitsError?: string
+  /** the usage service answered, and this login (an API key, a gateway, a usage-billed plan) has no 5 hour or weekly windows */
+  noLimits?: boolean
   /** per window kind: the usual final % and the one-off % left out of the pace */
   pace?: Record<string, PaceOf>
   /** the minute it was taken in: redraws countdowns at least once a minute */
