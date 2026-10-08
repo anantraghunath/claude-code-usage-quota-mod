@@ -130,7 +130,15 @@ The band appears once the plugins reload. If it doesn't, restart Claude Code.
 Either way installs it for **both** the desktop app and the terminal.
 
 > [!IMPORTANT]
-> **Installed before v0.1.5?** The plugin was renamed from `claude-code-usage-quota` to **`usage-quota`**, because Claude Code reserves names starting with `claude-` for Anthropic's own plugins. Updating won't pick up the new name, so remove the old one and install again (in the desktop app, ask Claude to run these):
+> **Installed before v0.1.5?** The plugin was renamed from `claude-code-usage-quota` to **`usage-quota`**, because Claude Code reserves names starting with `claude-` for Anthropic's own plugins. Updating won't pick up the new name, so remove the old one and install again.
+>
+> **Desktop app:** in the **Code** tab, send this as a message:
+>
+> ```text
+> Run these one at a time: claude plugin uninstall claude-code-usage-quota@claude-code-usage-quota-mod, then claude plugin marketplace update claude-code-usage-quota-mod, then claude plugin install usage-quota@claude-code-usage-quota-mod
+> ```
+>
+> **Terminal:** run these in your shell:
 >
 > ```bash
 > claude plugin uninstall claude-code-usage-quota@claude-code-usage-quota-mod
