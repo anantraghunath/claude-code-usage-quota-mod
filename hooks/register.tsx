@@ -142,10 +142,10 @@ function worse(a: string, b: string): string {
 function duration(ms: number): string {
   const m = Math.max(0, Math.round(ms / 60_000))
   const d = Math.floor(m / 1440)
-  const h = Math.floor((m % 1440) / 60)
+  const hours = Math.floor((m % 1440) / 60)
   const min = m % 60
-  if (d > 0) return h > 0 ? `${d}d ${h}h` : `${d}d`
-  if (h > 0) return min > 0 ? `${h}h ${min}m` : `${h}h`
+  if (d > 0) return hours > 0 ? `${d}d ${hours}h` : `${d}d`
+  if (hours > 0) return min > 0 ? `${hours}h ${min}m` : `${hours}h`
   return `${min}m`
 }
 
@@ -228,18 +228,18 @@ const SWITCH_NUDGE = 0.5
 // square frame round the light (the word "transparent" draws white or nothing)
 const CLEAR = '#00000000'
 // a space a wrap never breaks at
-const NB = ' '
+const NB = '\u00a0'
 
 function switchSvg(isOn: boolean): string {
   // the pill sits inset by PAD: the light under the pointer shows around it
   const w = SWITCH_W - 2 * SWITCH_PAD
-  const h = SWITCH_H - 2 * SWITCH_PAD
+  const tall = SWITCH_H - 2 * SWITCH_PAD
   const p = SWITCH_PAD
-  const knob = p + (isOn ? w - h / 2 : h / 2)
+  const knob = p + (isOn ? w - tall / 2 : tall / 2)
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${SWITCH_W}" height="${SWITCH_H}" viewBox="${-SWITCH_NUDGE} ${-SWITCH_NUDGE} ${SWITCH_W} ${SWITCH_H}">` +
-    `<rect x="${p}" y="${p}" width="${w}" height="${h}" rx="${h / 2}" fill="${isOn ? SWITCH_ON : SWITCH_OFF}"/>` +
-    `<circle cx="${knob}" cy="${p + h / 2}" r="${h / 2 - 2}" fill="#ffffff"/></svg>`
+    `<rect x="${p}" y="${p}" width="${w}" height="${tall}" rx="${tall / 2}" fill="${isOn ? SWITCH_ON : SWITCH_OFF}"/>` +
+    `<circle cx="${knob}" cy="${p + tall / 2}" r="${tall / 2 - 2}" fill="#ffffff"/></svg>`
   )
 }
 
@@ -298,7 +298,6 @@ function cellRuns(f: Forecast, cells: number): { color: string; width: number }[
   return runs
 }
 
-const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 // The usage service rate-limits per login, and the app's own Usage panel asks it on
 // the same allowance, so ask it seldom: when a chat opens, then every 2 minutes with the
 // exact context count, one ask for the whole app (when it was last asked, the answer and
@@ -330,7 +329,7 @@ async function fetchPlan($: EngineInterface): Promise<Limit[] | null> {
   const auth = await $.session.authorize()
   // no Claude login (an API key, a gateway): there is no plan to ask about
   if (!auth || auth.kind !== 'bearer') return null
-  const res = await $.http.fetch(USAGE_URL, {
+  const res = await $.http.fetch('https://api.anthropic.com/api/oauth/usage', {
     auth: auth.handle,
     headers: { 'anthropic-beta': 'oauth-2025-04-20', 'content-type': 'application/json' },
   })
@@ -588,7 +587,7 @@ async function calibrate($: EngineInterface): Promise<void> {
 // a reply has been seen since the chat opened or was last compacted
 let hadReply = false
 async function setHold($: EngineInterface, patch: Partial<Hold>): Promise<void> {
-  await update($, hold, h => ({ ...h, ...patch }))
+  await update($, hold, held => ({ ...held, ...patch }))
 }
 let isBusy = false
 let isCompacting = false
@@ -717,7 +716,7 @@ let restTimer: { cancel(): void } | null = null
 const AT_DIGITS = 3
 // a mark of no width, so a cleaned text equal to the one drawn still redraws (an
 // unchanged value would leave the typing as it is) without a new field losing focus
-const NO_WIDTH = '​'
+const NO_WIDTH = '\u200b'
 
 function cleanAt(value: string): string {
   return value.replace(/\D/g, '').slice(0, AT_DIGITS)
@@ -822,8 +821,7 @@ async function osTheme($: EngineInterface): Promise<'dark' | 'light'> {
   let value: 'dark' | 'light' = 'dark'
   try {
     if (await $.env.get('APPDATA')) {
-      const key = String.raw`HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`
-      const { stdout } = await $.process.run(['reg', 'query', key, '/v', 'AppsUseLightTheme'], { timeoutMs: 5_000 })
+      const { stdout } = await $.process.run(['reg', 'query', String.raw`HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, '/v', 'AppsUseLightTheme'], { timeoutMs: 5_000 })
       if (/AppsUseLightTheme\s+REG_DWORD\s+0x1\b/.test(stdout)) value = 'light'
     } else {
       const { stdout } = await $.process.run(['defaults', 'read', '-g', 'AppleInterfaceStyle'], { timeoutMs: 5_000 })
@@ -1133,7 +1131,7 @@ export const register: Register = on => {
                 <Input
                   key={`autoAt${tick}`}
                   value={drawnAt}
-                  submitLabel={'​'}
+                  submitLabel={'\u200b'}
                   onInput={value => typedAt($, value)}
                   onSubmit={value => submitAt(value)}
                 />

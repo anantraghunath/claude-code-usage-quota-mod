@@ -1,6 +1,6 @@
 # Claude Code Usage Quota Mod with Auto Compact
 
-[![Version: v0.1.5](docs/badges/version-v0.1.5.svg)](https://github.com/anantraghunath/claude-code-usage-quota-mod/releases/latest) ![Auto compact: 30% default](docs/badges/auto-compact-v2.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
+[![Version: v0.1.6](docs/badges/version-v0.1.6.svg)](https://github.com/anantraghunath/claude-code-usage-quota-mod/releases/latest) ![Auto compact: 30% default](docs/badges/auto-compact-v2.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
 
 **Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. **Compact in one click, or let it compact automatically.**
 
@@ -189,7 +189,19 @@ claude plugin marketplace remove claude-code-usage-quota-mod
 
 ## Privacy
 
-**Everything runs on your machine**, with the same access Claude Code has, like any mod, so read the code before installing any mod you don't trust. It reads what Claude Code already has (your context and the limits each reply carries), and about every 2 minutes asks Anthropic's usage service for your limits through your existing Claude login. It **never sees your credentials** and sends nothing anywhere else. In the desktop app it reads the app's theme setting to match light or dark.
+**Everything runs on your machine**, with the same access Claude Code has, like any mod, so read the code before installing any mod you don't trust. It **never sees your credentials** and sends nothing anywhere except the one request below.
+
+<details>
+<summary>Exactly what it reads, sends and runs</summary>
+
+- **Network:** about every 2 minutes, one request to `https://api.anthropic.com/api/oauth/usage`, Anthropic's usage service, for your 5 Hour and Weekly limits. It goes through your existing Claude login: Claude Code attaches the credential, and the mod never sees it. That is the only host it contacts. The `www.w3.org` address in the code is only the namespace of the drawn bars' SVG images; nothing is sent there.
+- **Your session:** it reads the context size and the limits each reply carries, as Claude Code reports them. It doesn't read or send what you or Claude write.
+- **Commands:** it runs `/compact` when you press **Compact**, or when Auto compact reaches your %. It adds `/quota`, which turns the band off and on.
+- **Programs:** only to match your system's light or dark mode, when the desktop app follows the system: `reg query` for `AppsUseLightTheme` on Windows, `defaults read -g AppleInterfaceStyle` on macOS.
+- **Files:** it reads the desktop app's `config.json` for its theme setting. Once, after the v0.1.5 rename, it copies the old plugin's saved settings from `~/.claude/plugins/store`.
+- **Hooks:** the band's own clicks and focus (`ui.press`, `ui.focus`) and edits to the prompt (`prompt.edit`) only set a % you typed in the band, then pass on unchanged. Turns starting and ending tell it when a reply is running, so Auto compact never interrupts one.
+
+</details>
 
 ## Feedback and contributing
 
