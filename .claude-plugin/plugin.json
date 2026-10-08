@@ -1,7 +1,7 @@
 {
   "name": "usage-quota",
   "version": "0.1.6",
-  "description": "Your Claude plan limits, a forecast of when you'll run out, and your context window, live in a band above the prompt, with one-click and automatic compacting",
+  "description": "Know your Claude limits before they hit you (Live band above the Claude Code prompt): 5 Hour and Weekly usage (whole account) with a live usage forecast against limit resets, context window usage, one-click Compact and per-session Auto compact (30% default).",
   "author": { "name": "Anant Raghunath", "url": "https://github.com/anantraghunath" },
   "homepage": "https://github.com/anantraghunath/claude-code-usage-quota-mod",
   "repository": "https://github.com/anantraghunath/claude-code-usage-quota-mod",
