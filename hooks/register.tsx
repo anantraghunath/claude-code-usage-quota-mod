@@ -355,9 +355,9 @@ type Saved = { at: number; limits: Limit[] }
 // this chat's own reading from its replies, and when it last changed
 let live: Saved | undefined
 
-async function storeGet<T>($: EngineInterface, key: string): Promise<T | undefined> {
+async function storeGet($: EngineInterface, key: string): Promise<unknown> {
   try {
-    return (await $.store.get(key)) as T | undefined
+    return await $.store.get(key)
   } catch {
     return undefined
   }
@@ -411,9 +411,9 @@ async function limitsOf(
     const limits = rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed, resetsAt: r.resetsAt }))
     if (!live || JSON.stringify(live.limits) !== JSON.stringify(limits)) live = { at: now, limits }
   }
-  let saved = await storeGet<Saved>($, 'limits')
-  let backoff = await storeGet<Backoff>($, 'planBackoff')
-  const askedAt = (await storeGet<number>($, 'planAskedAt')) ?? 0
+  let saved = (await storeGet($, 'limits')) as Saved | undefined
+  let backoff = (await storeGet($, 'planBackoff')) as Backoff | undefined
+  const askedAt = ((await storeGet($, 'planAskedAt')) as number | undefined) ?? 0
   const isFree = now >= (backoff?.until ?? 0)
   const isDue = ask === 'now' || (ask === 'due' && now - askedAt >= PLAN_EVERY_MS - PLAN_SLACK_MS)
   if (isDue && isFree) {
@@ -447,7 +447,7 @@ async function limitsOf(
   // percents, and seen at 18 for an hour while the service said 19.0. Use only climbs
   // within a window, so a newer reply figure below the service's last answer is stale:
   // the higher of the two is kept. Above it, the reply's is news.
-  const plan = await storeGet<Saved>($, 'planLimits')
+  const plan = (await storeGet($, 'planLimits')) as Saved | undefined
   const finer = (l: Limit): Limit => {
     const p = plan?.limits.find(x => x.kind === l.kind)
     return p && sameWindow(p.resetsAt, l.resetsAt) && p.percentUsed > l.percentUsed ? { ...l, percentUsed: p.percentUsed } : l
@@ -500,7 +500,7 @@ function takeSpike(): Record<string, number> | undefined {
 
 async function trackPace($: EngineInterface, limits: Limit[], now: number): Promise<Record<string, PaceOf>> {
   const spike = takeSpike()
-  const saved = (await storeGet<PaceStore>($, 'pace')) ?? { finals: {}, windows: {} }
+  const saved = ((await storeGet($, 'pace')) as PaceStore | undefined) ?? { finals: {}, windows: {} }
   let isChanged = false
   const pace: Record<string, PaceOf> = {}
   for (const l of limits) {
@@ -689,7 +689,7 @@ async function loadAuto($: EngineInterface): Promise<void> {
   const id = await chatId($)
   if (id === autoChat) return
   autoChat = id
-  const saved = await storeGet<AutoCompact>($, `autoCompact:${id}`)
+  const saved = (await storeGet($, `autoCompact:${id}`)) as AutoCompact | undefined
   await update($, autoCompact, () => (saved ? { ...saved, at: saved.at ?? AT_DEFAULT } : { isOn: false, at: AT_DEFAULT }))
   // the same chat after a reload keeps its ask and what holds it back
   if ((await read($, hold)).chat === id) return
@@ -797,7 +797,7 @@ let hadError = false
 const COLLAPSE_EVERY_MS = 500
 // this chat's own press, until the store has it
 async function syncCollapsed($: EngineInterface): Promise<void> {
-  const saved = (await storeGet<boolean>($, 'collapsed')) === true
+  const saved = ((await storeGet($, 'collapsed')) as boolean | undefined) === true
   if (saved !== (await read($, isCollapsed))) await update($, isCollapsed, () => saved)
 }
 
