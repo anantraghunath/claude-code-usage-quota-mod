@@ -1,17 +1,20 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
-import type { AutoCompact, Category, Limit, PaceOf, Snapshot } from '../types'
+import type { AutoCompact, Category, Hold, Limit, PaceOf, Snapshot } from '../types'
 
-const snapshot = atom({ plugin: 'claude-code-usage-quota', key: 'snapshot' } as const, null)
-const isOn = atom({ plugin: 'claude-code-usage-quota', key: 'isOn' } as const, true)
-const isCollapsed = atom({ plugin: 'claude-code-usage-quota', key: 'isCollapsed' } as const, false)
-const autoCompact = atom({ plugin: 'claude-code-usage-quota', key: 'autoCompact' } as const, { isOn: false, at: null } as AutoCompact)
-const fieldTick = atom({ plugin: 'claude-code-usage-quota', key: 'fieldTick' } as const, 0)
+const snapshot = atom({ plugin: 'usage-quota', key: 'snapshot' } as const, null)
+const isOn = atom({ plugin: 'usage-quota', key: 'isOn' } as const, true)
+const isCollapsed = atom({ plugin: 'usage-quota', key: 'isCollapsed' } as const, false)
+const autoCompact = atom({ plugin: 'usage-quota', key: 'autoCompact' } as const, { isOn: false, at: null } as AutoCompact)
+const fieldTick = atom({ plugin: 'usage-quota', key: 'fieldTick' } as const, 0)
 // the % field's text while typing is cleaned (digits only, 3 at most); null: the set %
-const fieldText = atom({ plugin: 'claude-code-usage-quota', key: 'fieldText' } as const, null as string | null)
-const theme = atom({ plugin: 'claude-code-usage-quota', key: 'theme' } as const, 'dark' as 'dark' | 'light')
-const autoAsk = atom({ plugin: 'claude-code-usage-quota', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
+const fieldText = atom({ plugin: 'usage-quota', key: 'fieldText' } as const, null as string | null)
+const theme = atom({ plugin: 'usage-quota', key: 'theme' } as const, 'dark' as 'dark' | 'light')
+const autoAsk = atom({ plugin: 'usage-quota', key: 'autoAsk' } as const, null as { at: number; percent: number } | null)
+// what holds auto compact back, and in which chat: kept in state so a reload (an
+// update, /reload-plugins) keeps it, where a module variable would start over
+const hold = atom({ plugin: 'usage-quota', key: 'hold' } as const, { chat: '', waits: false, stuck: false } as Hold)
 
 // two palettes, the desktop's dark and light themes; the band draws in the one the
 // app shows (Theme), set at the start of every draw so all colours below follow it
@@ -361,6 +364,33 @@ async function storeGet<T>($: EngineInterface, key: string): Promise<T | undefin
   }
 }
 
+// v0.1.5 renamed the plugin from claude-code-usage-quota, a name kept for Anthropic's
+// own plugins. Its store is a file under the old name, so what it held (each chat's
+// auto compact, the learned pace) is copied over once, never over a newer value
+const OLD_STORE = 'claude-code-usage-quota_claude-code-usage-quota-mod-'
+async function migrateStore($: EngineInterface): Promise<void> {
+  if (await storeGet($, 'migrated')) return
+  try {
+    const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
+    const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? (home ? `${home}/.claude` : undefined)
+    if (config) {
+      const dir = `${config}/plugins/store`
+      const old = (await $.fs.list(dir))
+        .filter(f => f.kind === 'file' && f.name.startsWith(OLD_STORE) && f.name.endsWith('.json'))
+        .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]
+      if (old) {
+        const saved = JSON.parse(String(await $.fs.read(`${dir}/${old.name}`))) as Record<string, unknown>
+        for (const [key, value] of Object.entries(saved)) {
+          if ((await storeGet($, key)) === undefined) await storeSet($, key, value)
+        }
+      }
+    }
+  } catch (error) {
+    $.ui.log(`usage-quota: the old settings could not be copied: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+  }
+  await storeSet($, 'migrated', true)
+}
+
 async function storeSet($: EngineInterface, key: string, value: unknown): Promise<void> {
   try {
     await $.store.set(key, value)
@@ -540,7 +570,7 @@ async function calibrate($: EngineInterface): Promise<void> {
     await $.store.set('calib', next)
     lastSnapshot = ''
   } catch (error) {
-    $.ui.log(`claude-code-usage-quota: exact count failed: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+    $.ui.log(`usage-quota: exact count failed: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
   } finally {
     isCalibrating = false
   }
@@ -550,15 +580,16 @@ async function calibrate($: EngineInterface): Promise<void> {
 
 // Auto compact fires whenever the chat is idle (no turn running) and the context
 // is at or past the %: at the end of a turn, on opening a chat, on any refresh between
-// turns. Held back only by: `waitsForCompact` (the band is asking, or the person chose
+// turns. Held back only by: `waits` (the band is asking, or the person chose
 // "after my next compact", which is also what an unanswered ask means: cleared only by
-// a real compaction, never by the % flickering below), `isStuck` (a compaction already ran and
+// a real compaction, never by the % flickering below), `stuck` (a compaction already ran and
 // the context is still past the %: it would only repeat; dropping below clears it).
 // The % is compared as the band shows it, rounded.
-let waitsForCompact = false
 // a reply has been seen since the chat opened or was last compacted
 let hadReply = false
-let isStuck = false
+async function setHold($: EngineInterface, patch: Partial<Hold>): Promise<void> {
+  await update($, hold, h => ({ ...h, ...patch }))
+}
 let isBusy = false
 let isCompacting = false
 let lastPercent = 0
@@ -597,7 +628,7 @@ function autoCompactNow($: EngineInterface, attempt = 1): void {
         ? await $.session.compact()
         : (await $.command.run({ command: 'compact' }), undefined)
       // held as stuck while the figures are read again, so no tick fires a second one
-      isStuck = true
+      await setHold($, { stuck: true })
       isCompacting = false
       if (result && 'skip' in result && result.skip) $.ui.toast(`Auto compact was skipped: ${result.skip}`)
       lastSnapshot = ''
@@ -607,7 +638,7 @@ function autoCompactNow($: EngineInterface, attempt = 1): void {
       const auto = await read($, autoCompact)
       if (auto.at !== null && Math.round(percent) >= auto.at) {
         $.ui.toast(`Context is still at ${Math.round(percent)}% after compacting, past your ${auto.at}%: auto compact waits until it drops below`)
-      } else isStuck = false
+      } else await setHold($, { stuck: false })
       await refresh($)
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
@@ -619,7 +650,7 @@ function autoCompactNow($: EngineInterface, attempt = 1): void {
       if (attempt < AUTO_TRIES) return autoCompactNow($, attempt + 1)
       isCompacting = false
       $.ui.toast(`Auto compact could not start: ${reason}`)
-      $.ui.log(`claude-code-usage-quota: auto compact failed: ${reason}`, { to: 'debug' })
+      $.ui.log(`usage-quota: auto compact failed: ${reason}`, { to: 'debug' })
     }
   })
 }
@@ -629,11 +660,12 @@ async function watchAuto($: EngineInterface, percent: number): Promise<void> {
   lastPercent = percent
   const auto = await read($, autoCompact)
   if (!auto.isOn || auto.at === null) return
+  const held = await read($, hold)
   if (Math.round(percent) < auto.at) {
-    isStuck = false
+    if (held.stuck) await setHold($, { stuck: false })
     return
   }
-  if (waitsForCompact || isStuck || isBusy || isCompacting) return
+  if (held.waits || held.stuck || isBusy || isCompacting) return
   $.ui.toast(`Context at ${Math.round(percent)}%: auto compacting (set at ${auto.at}%)`)
   autoCompactNow($)
 }
@@ -659,9 +691,10 @@ async function loadAuto($: EngineInterface): Promise<void> {
   if (id === autoChat) return
   autoChat = id
   const saved = await storeGet<AutoCompact>($, `autoCompact:${id}`)
-  isStuck = false
-  waitsForCompact = false
   await update($, autoCompact, () => (saved ? { ...saved, at: saved.at ?? AT_DEFAULT } : { isOn: false, at: AT_DEFAULT }))
+  // the same chat after a reload keeps its ask and what holds it back
+  if ((await read($, hold)).chat === id) return
+  await update($, hold, () => ({ chat: id, waits: false, stuck: false }))
   await update($, autoAsk, () => null)
 }
 
@@ -737,9 +770,8 @@ async function setThreshold($: EngineInterface, at: number): Promise<void> {
 
 // turning it on, or a new %, while the context is already past it: ask first
 async function askIfPast($: EngineInterface, at: number | null): Promise<void> {
-  isStuck = false
   const isPast = at !== null && Math.round(lastPercent) >= at
-  waitsForCompact = isPast
+  await setHold($, { waits: isPast, stuck: false })
   await update($, autoAsk, () => (isPast ? { at: at!, percent: Math.round(lastPercent) } : null))
   if (!isPast && at !== null) $.ui.toast(`Auto compact at ${at}% context`)
 }
@@ -750,7 +782,7 @@ async function answerAsk($: EngineInterface, choice: AskChoice): Promise<void> {
   await update($, autoAsk, () => null)
   // 'next': goes on waiting until a compaction is seen (the reply total goes blank)
   if (choice === 'now') {
-    waitsForCompact = false
+    await setHold($, { waits: false })
     autoCompactNow($)
   }
 }
@@ -818,7 +850,7 @@ async function syncTheme($: EngineInterface): Promise<void> {
       themeFile = { mtimeMs, mode }
     }
   } catch (error) {
-    if (!didLogTheme) $.ui.log(`claude-code-usage-quota: the app's theme could not be read: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
+    if (!didLogTheme) $.ui.log(`usage-quota: the app's theme could not be read: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' })
     didLogTheme = true
     return
   }
@@ -855,8 +887,10 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
     else if (hadReply) {
       hadReply = false
       // an ask left unanswered meant "after my next compact": done with now
-      if (waitsForCompact) await update($, autoAsk, () => null)
-      waitsForCompact = false
+      if ((await read($, hold)).waits) {
+        await update($, autoAsk, () => null)
+        await setHold($, { waits: false })
+      }
     }
     const useExact = context.tokens === undefined && exactCount !== undefined && noReplySince !== undefined && exactCount.at >= noReplySince
     let tools = Math.round(rough.Tools * (calib.Tools ?? 1))
@@ -902,7 +936,7 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
     hadError = false
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    $.ui.status(`claude-code-usage-quota: ${message.replace(/^claude-code-usage-quota: /, '')}`)
+    $.ui.status(`usage-quota: ${message.replace(/^usage-quota: /, '')}`)
     hadError = true
   } finally {
     isRefreshing = false
@@ -918,6 +952,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'quota', description: 'Toggle the Claude Code Usage Quota band above the prompt' })
     const result = await next(e)
+    await migrateStore($)
     try {
       calib = ((await $.store.get('calib')) as typeof calib | undefined) ?? {}
     } catch {
@@ -951,7 +986,7 @@ export const register: Register = on => {
   on('ui.focus', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (!e.element?.startsWith('autoAt')) await commitDraft($)
     return next(e)
-  })
+  }).catch(($, e, next) => next(e)) // a draft that fails to set never holds the focus back
 
   on('ui.press', { component: 'AbovePrompt' }, async ($, e, next) => {
     await commitDraft($)

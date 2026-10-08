@@ -1,6 +1,6 @@
 # Claude Code Usage Quota Mod with Auto Compact
 
-[![Version: v0.1.4](docs/badges/version-v0.1.4.svg)](https://github.com/anantraghunath/claude-code-usage-quota-mod/releases/latest) ![Auto compact: 30% default](docs/badges/auto-compact-v2.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
+[![Version: v0.1.5](docs/badges/version-v0.1.5.svg)](https://github.com/anantraghunath/claude-code-usage-quota-mod/releases/latest) ![Auto compact: 30% default](docs/badges/auto-compact-v2.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
 
 **Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. **Compact in one click, or let it compact automatically.**
 
@@ -103,26 +103,53 @@ In the terminal, **▲/▼** expands and collapses it. The `[-]` next to it is C
 
 ## Install
 
-Needs a recent Claude Code, signed in with a **Pro or Max** plan.
+Needs **Claude Code 2.1.287 or later**, signed in with a **Pro or Max** plan.
 
-**Desktop app:** in the **Code** tab, send this as a message, allow the `claude plugin` command if asked, then **quit and reopen** the app:
+**Terminal:** inside `claude`, run these one at a time:
 
 ```text
-Install the claude-code-usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
+/plugin marketplace add anantraghunath/claude-code-usage-quota-mod
 ```
 
-**Terminal:** inside `claude`, run:
+```text
+/plugin install usage-quota@claude-code-usage-quota-mod
+```
 
 ```text
-/plugin install claude-code-usage-quota --marketplace anantraghunath/claude-code-usage-quota-mod
+/reload-plugins
+```
+
+The band appears once the plugins reload. If it doesn't, restart Claude Code.
+
+**Desktop app:** in the **Code** tab, send this as a message, allow the `claude plugin` commands if asked, then **quit and reopen** the app:
+
+```text
+Install the usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
 ```
 
 Either way installs it for **both** the desktop app and the terminal.
 
+> [!IMPORTANT]
+> **Installed before v0.1.5?** The plugin was renamed from `claude-code-usage-quota` to **`usage-quota`**, because Claude Code reserves names starting with `claude-` for Anthropic's own plugins. Updating won't pick up the new name, so remove the old one and install again (in the desktop app, ask Claude to run these):
+>
+> ```bash
+> claude plugin uninstall claude-code-usage-quota@claude-code-usage-quota-mod
+> ```
+>
+> ```bash
+> claude plugin marketplace update claude-code-usage-quota-mod
+> ```
+>
+> ```bash
+> claude plugin install usage-quota@claude-code-usage-quota-mod
+> ```
+>
+> Then restart. Your Auto compact settings and learned pace carry over.
+
 **Update:** ask Claude, then restart:
 
 ```text
-Update the claude-code-usage-quota plugin from its marketplace
+Update the usage-quota plugin from its marketplace
 ```
 
 **Uninstall:** in the desktop app, ask Claude:
@@ -143,13 +170,13 @@ then restart. This removes it from both. Just want it out of sight? **`/quota`**
 <summary>From your own shell instead</summary>
 
 ```bash
-claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod; claude plugin install claude-code-usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace add anantraghunath/claude-code-usage-quota-mod; claude plugin install usage-quota@claude-code-usage-quota-mod
 ```
 
 To update:
 
 ```bash
-claude plugin marketplace update claude-code-usage-quota-mod; claude plugin update claude-code-usage-quota@claude-code-usage-quota-mod
+claude plugin marketplace update claude-code-usage-quota-mod; claude plugin update usage-quota@claude-code-usage-quota-mod
 ```
 
 To uninstall:
@@ -162,7 +189,7 @@ claude plugin marketplace remove claude-code-usage-quota-mod
 
 ## Privacy
 
-**Everything runs on your machine.** It reads what Claude Code already has (your context and the limits each reply carries), and about every 2 minutes asks Anthropic's usage service for your limits through your existing Claude login. It **never sees your credentials** and sends nothing anywhere else. In the desktop app it reads the app's theme setting to match light or dark.
+**Everything runs on your machine**, with the same access Claude Code has, like any mod, so read the code before installing any mod you don't trust. It reads what Claude Code already has (your context and the limits each reply carries), and about every 2 minutes asks Anthropic's usage service for your limits through your existing Claude login. It **never sees your credentials** and sends nothing anywhere else. In the desktop app it reads the app's theme setting to match light or dark.
 
 ## Feedback and contributing
 

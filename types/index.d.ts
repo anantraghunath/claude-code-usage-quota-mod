@@ -21,15 +21,19 @@ export type Snapshot = {
 /** auto compact: on or off, and the context % that sets it off (kept for every chat) */
 export type AutoCompact = { isOn: boolean; at: number | null }
 
+/** what holds auto compact back in a chat: an ask (or "after my next compact"), or a compaction that left it past the % */
+export type Hold = { chat: string; waits: boolean; stuck: boolean }
+
 declare module 'claude-code' {
   interface PluginState {
-    'claude-code-usage-quota': {
+    'usage-quota': {
       snapshot: Snapshot | null
       isOn: boolean
       isCollapsed: boolean
       autoCompact: AutoCompact
       /** the choice the band is asking for: the context was already past a new % */
       autoAsk: { at: number; percent: number } | null
+      hold: Hold
       /** bumped on every % set: draws the field afresh even when the value is unchanged */
       fieldTick: number
       fieldText: string | null
