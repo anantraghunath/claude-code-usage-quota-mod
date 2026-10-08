@@ -7,7 +7,7 @@
       "name": "claude-code-usage-quota",
       "source": "./",
       "description": "Your Claude plan limits, a forecast of when you'll run out, and your context window, live in a band above the prompt, with one-click and automatic compacting",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "license": "MIT",
       "keywords": ["usage", "quota", "rate limits", "context window", "compact", "mod"]
     }

@@ -1,6 +1,6 @@
 # Claude Code Usage Quota Mod with Auto Compact
 
-[![Version: v0.1.3](docs/badges/version-v0.1.3.svg)](https://github.com/anantraghunath/claude-code-usage-quota-mod/releases/latest) ![Auto compact: 30% default](docs/badges/auto-compact-v2.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
+[![Version: v0.1.4](docs/badges/version-v0.1.4.svg)](https://github.com/anantraghunath/claude-code-usage-quota-mod/releases/latest) ![Auto compact: 30% default](docs/badges/auto-compact-v2.svg) ![Compact: one click](docs/badges/compact-v2.svg) ![5 Hour + Weekly: whole account](docs/badges/limits-v2.svg) ![Forecast: before reset](docs/badges/forecast-v2.svg) ![Works in: Desktop + Terminal](docs/badges/works-in-v2.svg) ![License: MIT](docs/badges/license-v2.svg)
 
 **Know your Claude limits before they hit you.** A live band above the Claude Code prompt that shows your plan limits, forecasts whether you'll run out before they reset, and shows how full your context window is. **Compact in one click, or let it compact automatically.**
 
@@ -51,9 +51,9 @@ On course to run out, it warns you and says **when you'll hit the limit**:
 
 If the session is already past your % when you turn it on, it asks first:
 
-![Auto compact asking what to do, with the context already at 72%](docs/auto-compact-ask.png)
+![Auto compact asking what to do, with the context already at 72%](docs/auto-compact-ask-v2.png)
 
-![The same question with the band collapsed](docs/auto-compact-ask-collapsed.png)
+![The same question with the band collapsed](docs/auto-compact-ask-collapsed-v2.png)
 
 - **Now** compacts straight away.
 - **After my next compact** waits until the session is compacted some other way (Compact, `/compact`, or Claude Code's own), then takes over.
