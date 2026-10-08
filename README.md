@@ -105,6 +105,12 @@ In the terminal, **▲/▼** expands and collapses it. The `[-]` next to it is C
 
 Needs **Claude Code 2.1.287 or later**, signed in with a **Pro or Max** plan.
 
+**Desktop app:** in the **Code** tab, send this as a message, allow the `claude plugin` commands if asked, then **quit and reopen** the app:
+
+```text
+Install the usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
+```
+
 **Terminal:** inside `claude`, run these one at a time:
 
 ```text
@@ -120,12 +126,6 @@ Needs **Claude Code 2.1.287 or later**, signed in with a **Pro or Max** plan.
 ```
 
 The band appears once the plugins reload. If it doesn't, restart Claude Code.
-
-**Desktop app:** in the **Code** tab, send this as a message, allow the `claude plugin` commands if asked, then **quit and reopen** the app:
-
-```text
-Install the usage-quota plugin from the GitHub marketplace anantraghunath/claude-code-usage-quota-mod
-```
 
 Either way installs it for **both** the desktop app and the terminal.
 
