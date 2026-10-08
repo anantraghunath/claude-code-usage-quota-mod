@@ -821,7 +821,7 @@ async function osTheme($: EngineInterface): Promise<'dark' | 'light'> {
   let value: 'dark' | 'light' = 'dark'
   try {
     if (await $.env.get('APPDATA')) {
-      const { stdout } = await $.process.run(['reg', 'query', String.raw`HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, '/v', 'AppsUseLightTheme'], { timeoutMs: 5_000 })
+      const { stdout } = await $.process.run(['reg', 'query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', '/v', 'AppsUseLightTheme'], { timeoutMs: 5_000 })
       if (/AppsUseLightTheme\s+REG_DWORD\s+0x1\b/.test(stdout)) value = 'light'
     } else {
       const { stdout } = await $.process.run(['defaults', 'read', '-g', 'AppleInterfaceStyle'], { timeoutMs: 5_000 })
