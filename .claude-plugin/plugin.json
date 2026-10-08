@@ -8,8 +8,5 @@
   "license": "MIT",
   "keywords": ["usage", "quota", "rate limits", "context window", "compact", "mod"],
   "privacyPolicyUrl": "https://github.com/anantraghunath/claude-code-usage-quota-mod#privacy",
-  "termsOfServiceUrl": "https://github.com/anantraghunath/claude-code-usage-quota-mod/blob/main/LICENSE",
-  "documentationUrl": "https://github.com/anantraghunath/claude-code-usage-quota-mod#readme",
-  "supportUrl": "https://github.com/anantraghunath/claude-code-usage-quota-mod/issues",
   "types": "./types/index.d.ts"
 }
