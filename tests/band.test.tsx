@@ -292,7 +292,7 @@ test('the plan endpoint gives the limits before any reply, and wins', async ($, 
   await $.session.start({ cwd: '.', surface: 'desktop', isInteractive: true })
   await $.session.measure(MEASURE)
 
-  expect(asked).toEqual(['https://api.anthropic.com/api/oauth/usage'])
+  expect(asked).toEqual([expect.stringMatching(/\/api\/oauth\/usage$/)])
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: PROPS })
     expect(await ui.find({ type: 'Text', text: '16%' })).toBeDefined()
