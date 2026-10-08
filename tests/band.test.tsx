@@ -301,6 +301,63 @@ test('the plan endpoint gives the limits before any reply, and wins', async ($, 
   }
 })
 
+// a plan with no 5 hour or weekly windows (Team or Enterprise billed by usage): the service
+// answers 200 with both null; not a failure, so no back-off and no "usage check" note
+test('a plan with no windows says so, and is asked on the usual 2 minutes', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  mock.store(on)
+  let asks = 0
+  on('session.usage', () => ({ value: usage([]) }))
+  on('session.authorize', () => ({ value: { handle: 'h', kind: 'bearer' } }))
+  on('http.fetch', () => {
+    asks += 1
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ five_hour: null, seven_day: null }) } } as never
+  })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: { command: 'quota' } }))
+  on('session.measure', () => ({ changed: [] }))
+  on('ui.render', () => ({ type: 'Box', props: {}, children: [] }) as never)
+  on('ui.status', () => ({ value: undefined }))
+  await $.session.start({ cwd: '.', surface: 'desktop', isInteractive: true })
+  expect(asks).toBe(1)
+
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface, component: 'AbovePrompt', props: PROPS })
+    expect(await ui.find({ type: 'Text', text: 'No 5 hour or weekly plan limits for this login.' })).toBeDefined()
+    expect(await ui.find({ text: 'Usage limits show after the first reply.' })).toBeUndefined()
+    expect(await ui.find({ text: /usage check/ })).toBeUndefined()
+    // the context half still draws
+    expect(await ui.find({ text: '16% used' })).toBeDefined()
+    await ui.unmount()
+  }
+  await clock.advance(2 * MIN)
+  expect(asks).toBe(2)
+})
+
+test('a login with no Claude credential says there are no plan limits, and asks nothing', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  mock.store(on)
+  let asks = 0
+  on('session.usage', () => ({ value: usage([]) }))
+  on('session.authorize', () => ({ value: null }))
+  on('http.fetch', () => {
+    asks += 1
+    return { value: { status: 500, ok: false, headers: {}, text: '' } } as never
+  })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: { command: 'quota' } }))
+  on('session.measure', () => ({ changed: [] }))
+  on('ui.render', () => ({ type: 'Box', props: {}, children: [] }) as never)
+  on('ui.status', () => ({ value: undefined }))
+  await $.session.start({ cwd: '.', surface: 'desktop', isInteractive: true })
+  await clock.advance(2 * MIN)
+
+  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  expect(await ui.find({ type: 'Text', text: 'No 5 hour or weekly plan limits for this login.' })).toBeDefined()
+  expect(asks).toBe(0)
+  await ui.unmount()
+})
+
 test('the exact /context count corrects the estimate, and Messages with it', async ($, on) => {
   const clock = mock.clock(on, { now: NOW })
   mock.store(on)

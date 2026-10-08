@@ -323,10 +323,12 @@ class AskError extends Error {
 
 // The plan's limits, as the app's "Plan usage limits" panel reads them: the account's
 // usage endpoint, through the session's own credential (the plugin never sees it).
-async function fetchPlan($: EngineInterface): Promise<Limit[] | null> {
+// An empty list is an answer too: a login or plan with no 5 hour or weekly windows
+// (an API key, a gateway, an Enterprise or Team plan billed by usage).
+async function fetchPlan($: EngineInterface): Promise<Limit[]> {
   const auth = await $.session.authorize()
   // no Claude login (an API key, a gateway): there is no plan to ask about
-  if (!auth || auth.kind !== 'bearer') return null
+  if (!auth || auth.kind !== 'bearer') return []
   const res = await $.http.fetch(USAGE_URL, {
     auth: auth.handle,
     headers: { 'anthropic-beta': 'oauth-2025-04-20', 'content-type': 'application/json' },
@@ -344,7 +346,6 @@ async function fetchPlan($: EngineInterface): Promise<Limit[] | null> {
     if (!w || typeof w.utilization !== 'number') continue
     limits.push({ kind, percentUsed: Math.round(w.utilization * 10) / 10, resetsAt: w.resets_at ?? undefined })
   }
-  if (limits.length === 0) throw new AskError('answer had no limits')
   return limits
 }
 
@@ -377,7 +378,7 @@ async function limitsOf(
   rateLimits: SessionRateLimit[],
   now: number,
   ask: Ask,
-): Promise<{ limits: Limit[]; at?: number; error?: string }> {
+): Promise<{ limits: Limit[]; at?: number; error?: string; none?: boolean }> {
   if (rateLimits.length > 0) {
     const limits = rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed, resetsAt: r.resetsAt }))
     if (!live || JSON.stringify(live.limits) !== JSON.stringify(limits)) live = { at: now, limits }
@@ -391,12 +392,9 @@ async function limitsOf(
     // claim the ask first, so the other chats see it taken and skip theirs
     await storeSet($, 'planAskedAt', now)
     try {
-      const plan = await fetchPlan($)
-      if (plan) {
-        saved = { at: now, limits: plan }
-        await storeSet($, 'limits', saved)
-        await storeSet($, 'planLimits', saved)
-      }
+      saved = { at: now, limits: await fetchPlan($) }
+      await storeSet($, 'limits', saved)
+      await storeSet($, 'planLimits', saved)
       if (backoff) await storeSet($, 'planBackoff', { until: 0, failures: 0, error: '' })
       backoff = undefined
     } catch (error) {
@@ -409,8 +407,9 @@ async function limitsOf(
       await storeSet($, 'planBackoff', backoff)
     }
   }
+  // an empty answer from the usage service never hides figures a reply carried
   const pick = [saved, live]
-    .filter((r): r is Saved => r !== undefined)
+    .filter((r): r is Saved => r !== undefined && r.limits.length > 0)
     .sort((x, y) => y.at - x.at)[0]
   // newer reply figures go to the store too, so other chats get them
   if (pick && pick === live && (!saved || live.at > saved.at)) await storeSet($, 'limits', live)
@@ -427,7 +426,9 @@ async function limitsOf(
   const limits = (pick?.limits ?? []).map(l =>
     l.resetsAt !== undefined && Date.parse(l.resetsAt) <= now ? { kind: l.kind, percentUsed: 0 } : finer(l),
   )
-  return { limits, at: pick?.at, error: backoff?.error || undefined }
+  // the service answered and this login has no windows to show: say so, don't wait for a reply
+  const none = !pick && saved !== undefined
+  return { limits, at: pick?.at, error: backoff?.error || undefined, ...(none ? { none } : {}) }
 }
 
 // What the forecast learns, shared by every chat through the store: how far each past
@@ -879,7 +880,7 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
         .filter(c => c.kind === 'buffer' || c.kind === 'free')
         .map(c => ({ name: c.name, tokens: c.tokens, kind: c.kind as Category['kind'] })),
     ].filter(c => c.tokens > 0)
-    const { limits, at: limitsAt, error: limitsError } = await limitsOf($, usage.rateLimits, now, ask)
+    const { limits, at: limitsAt, error: limitsError, none: noLimits } = await limitsOf($, usage.rateLimits, now, ask)
     const pace = await trackPace($, limits, now)
     const next: Snapshot = {
       window: context.window,
@@ -890,6 +891,7 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
       limits,
       ...(limitsAt !== undefined ? { limitsAt } : {}),
       ...(limitsError ? { limitsError } : {}),
+      ...(noLimits ? { noLimits } : {}),
       ...(Object.keys(pace).length > 0 ? { pace } : {}),
       // the minute, so countdowns and ages redraw even when nothing else moves
       minute: Math.floor(now / 60_000),
@@ -1184,7 +1186,11 @@ export const register: Register = on => {
 
     const limitsBlock = (
       <Box flexDirection="column" width={isSplit ? '50%' : undefined}>
-        {limits.length === 0 ? <Text color={MUTED} wrap="wrap">Usage limits show after the first reply.</Text> : null}
+        {limits.length === 0 ? (
+          <Text color={MUTED} wrap="wrap">
+            {snap.noLimits ? 'No 5 hour or weekly plan limits for this login.' : 'Usage limits show after the first reply.'}
+          </Text>
+        ) : null}
         {stale ? <Text color={AMBER} wrap="wrap">{stale}</Text> : null}
         {limits.map((f, i) => {
           // held together when the note wraps: "resets in 2d 20h" moves down whole,
