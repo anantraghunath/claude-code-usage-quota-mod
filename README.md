@@ -57,7 +57,6 @@ If the session is already past your % when you turn it on, it asks first:
 
 - **Now** compacts straight away.
 - **After my next compact** waits until the session is compacted some other way (Compact, `/compact`, or Claude Code's own), then takes over.
-- **Only in new chats** leaves this session alone until it's next opened.
 
 Works in **light and dark** themes and at **every width** down to the narrowest. Collapsed or expanded is shared across all sessions.
 

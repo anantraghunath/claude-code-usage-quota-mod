@@ -553,13 +553,12 @@ async function calibrate($: EngineInterface): Promise<void> {
 // turns. Held back only by: `waitsForCompact` (the band is asking, or the person chose
 // "after my next compact", which is also what an unanswered ask means: cleared only by
 // a real compaction, never by the % flickering below), `isStuck` (a compaction already ran and
-// the context is still past the %: it would only repeat; dropping below clears it),
-// `isHeld` ("only in new chats"). The % is compared as the band shows it, rounded.
+// the context is still past the %: it would only repeat; dropping below clears it).
+// The % is compared as the band shows it, rounded.
 let waitsForCompact = false
 // a reply has been seen since the chat opened or was last compacted
 let hadReply = false
 let isStuck = false
-let isHeld = false
 let isBusy = false
 let isCompacting = false
 let lastPercent = 0
@@ -629,7 +628,7 @@ function autoCompactNow($: EngineInterface, attempt = 1): void {
 async function watchAuto($: EngineInterface, percent: number): Promise<void> {
   lastPercent = percent
   const auto = await read($, autoCompact)
-  if (!auto.isOn || auto.at === null || isHeld) return
+  if (!auto.isOn || auto.at === null) return
   if (Math.round(percent) < auto.at) {
     isStuck = false
     return
@@ -660,7 +659,6 @@ async function loadAuto($: EngineInterface): Promise<void> {
   if (id === autoChat) return
   autoChat = id
   const saved = await storeGet<AutoCompact>($, `autoCompact:${id}`)
-  isHeld = false
   isStuck = false
   waitsForCompact = false
   await update($, autoCompact, () => (saved ? { ...saved, at: saved.at ?? AT_DEFAULT } : { isOn: false, at: AT_DEFAULT }))
@@ -739,7 +737,6 @@ async function setThreshold($: EngineInterface, at: number): Promise<void> {
 
 // turning it on, or a new %, while the context is already past it: ask first
 async function askIfPast($: EngineInterface, at: number | null): Promise<void> {
-  isHeld = false
   isStuck = false
   const isPast = at !== null && Math.round(lastPercent) >= at
   waitsForCompact = isPast
@@ -747,7 +744,7 @@ async function askIfPast($: EngineInterface, at: number | null): Promise<void> {
   if (!isPast && at !== null) $.ui.toast(`Auto compact at ${at}% context`)
 }
 
-type AskChoice = 'now' | 'next' | 'new'
+type AskChoice = 'now' | 'next'
 
 async function answerAsk($: EngineInterface, choice: AskChoice): Promise<void> {
   await update($, autoAsk, () => null)
@@ -755,7 +752,7 @@ async function answerAsk($: EngineInterface, choice: AskChoice): Promise<void> {
   if (choice === 'now') {
     waitsForCompact = false
     autoCompactNow($)
-  } else if (choice === 'new') isHeld = true
+  }
 }
 
 let isRefreshing = false
@@ -1063,10 +1060,10 @@ export const register: Register = on => {
     const isOneRow = width >= 72
     // the context's two figures on one line, or the free count on the next
     const isContextLine = column >= 38
-    // the question and its three answers on one line when they fit, else the answers
+    // the question and its two answers on one line when they fit, else the answers
     // beneath: measured from the words themselves (the desktop draws text narrower than
     // a cell each, as the headline's check allows), each button's chrome and the gaps
-    const ASK_LABELS = ['Now', 'After my next compact', 'Only in new chats']
+    const ASK_LABELS = ['Now', 'After my next compact']
     const askWords = (ask ? `Context is already at ${ask.percent}%, past ${ask.at}%. Auto compact:`.length : 0) + ASK_LABELS.join('').length
     const isAskLine = width >= askWords * (Svg ? 0.8 : 1) + ASK_LABELS.length * (Svg ? 3 : 4) + 3
 
@@ -1342,7 +1339,6 @@ export const register: Register = on => {
       <Box flexDirection="row" columnGap={1} flexWrap="wrap" flexShrink={0}>
         <Button key="askNow" label="Now" onPress={() => void answerAsk($, 'now')} />
         <Button key="askNext" label="After my next compact" onPress={() => void answerAsk($, 'next')} />
-        <Button key="askNew" label="Only in new chats" onPress={() => void answerAsk($, 'new')} />
       </Box>
     )
 

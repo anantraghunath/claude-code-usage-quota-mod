@@ -747,26 +747,6 @@ test('auto compact is per chat: another chat opens with it off, at 30%; turned o
   await ui.unmount()
 })
 
-test('"Only in new chats" leaves this chat alone', async ($, on) => {
-  const percent = { value: 50 }
-  const ran: string[] = []
-  const clock = startWorld(on, percent, ran, [], 'Only in new chats')
-  await $.session.start({ cwd: '.', surface: 'desktop', isInteractive: true })
-
-  const ui = await $.ui.mount({ plugin: 'claude-code-usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
-  await ui.press({ key: 'auto' })
-  await ui.input({ key: await fieldKey(ui), text: '40' })
-  await ui.press({ key: 'askNew' })
-  await clock.advance(1_100)
-  percent.value = 20
-  await clock.advance(3_000)
-  percent.value = 60
-  await $.turn.complete(TURN)
-  await clock.advance(1_100)
-  expect(ran).toEqual([])
-  await ui.unmount()
-})
-
 test('auto compact tries again while the turn is still winding down', async ($, on) => {
   const percent = { value: 16 }
   const clock = mock.clock(on, { now: NOW })
