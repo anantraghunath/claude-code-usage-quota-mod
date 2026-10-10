@@ -62,27 +62,25 @@ If the session is already past your % when you turn it on, it asks first:
 
 Works in **light and dark** themes and at **every width** down to the narrowest. Collapsed or expanded is shared across all sessions.
 
-<details>
-<summary><b>MORE SCREENSHOTS</b></summary>
-
-Early in a 5 hour window:
-
-![The band, expanded, early in a 5 hour window](docs/expanded-dark-early.png)
-
-![The band, collapsed, early in a 5 hour window](docs/collapsed-dark-early.png)
-
-Running out on the Weekly limit:
-
-![The band, expanded, on course to run out before the weekly reset](docs/run-out-weekly-expanded.png)
-
-![The band, collapsed, on course to run out before the weekly reset](docs/run-out-weekly-collapsed.png)
-
-| Light theme | Narrowest window |
-| --- | --- |
-| ![Light, expanded](docs/expanded-light.png) | ![Narrow, expanded](docs/narrow-expanded.png) |
-| ![Light, collapsed](docs/collapsed-light.png) | ![Narrow, collapsed](docs/narrow-collapsed.png) |
-
-</details>
+> [!TIP]
+> **More screenshots**
+>
+> Early in a 5 hour window:
+>
+> ![The band, expanded, early in a 5 hour window](docs/expanded-dark-early.png)
+>
+> ![The band, collapsed, early in a 5 hour window](docs/collapsed-dark-early.png)
+>
+> Running out on the Weekly limit:
+>
+> ![The band, expanded, on course to run out before the weekly reset](docs/run-out-weekly-expanded.png)
+>
+> ![The band, collapsed, on course to run out before the weekly reset](docs/run-out-weekly-collapsed.png)
+>
+> | Light theme | Narrowest window |
+> | --- | --- |
+> | ![Light, expanded](docs/expanded-light.png) | ![Narrow, expanded](docs/narrow-expanded.png) |
+> | ![Light, collapsed](docs/collapsed-light.png) | ![Narrow, collapsed](docs/narrow-collapsed.png) |
 
 ## Where it works
 
