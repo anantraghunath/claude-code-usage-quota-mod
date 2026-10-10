@@ -10,11 +10,11 @@ The 5 Hour and Weekly limits are **your whole Claude account's**, including what
 
 Type **`/quota`** to turn the band off and on.
 
-## Expanded
+## EXPANDED
 
 ![The band, expanded, above the prompt in the Claude desktop app](docs/expanded-desktop.png)
 
-## Collapsed
+## COLLAPSED
 
 One row that still shows the time left until each limit resets:
 
@@ -28,7 +28,7 @@ One row that still shows the time left until each limit resets:
 > - **Building something big?** Set Auto compact higher (say 70%) or turn it off, so Claude keeps the whole picture. Press **Compact** yourself at a good stopping point. (With it off, Claude Code's built-in compaction still steps in when the context is nearly full.)
 > - **Everyday sessions?** One click turns Auto compact on at 30%. They stay lean, and your 5 Hour and Weekly limits last longer.
 
-## What it shows
+## WHAT IT SHOWS
 
 **5 Hour and Weekly limits**
 - The **% used**, matching the app's own *Plan usage limits* panel.
@@ -63,7 +63,7 @@ If the session is already past your % when you turn it on, it asks first:
 Works in **light and dark** themes and at **every width** down to the narrowest. Collapsed or expanded is shared across all sessions.
 
 > [!NOTE]
-> **More screenshots**
+> **MORE SCREENSHOTS**
 >
 > Early in a 5 hour window:
 >
@@ -82,7 +82,7 @@ Works in **light and dark** themes and at **every width** down to the narrowest.
 > | ![Light, expanded](docs/expanded-light.png) | ![Narrow, expanded](docs/narrow-expanded.png) |
 > | ![Light, collapsed](docs/collapsed-light.png) | ![Narrow, collapsed](docs/narrow-collapsed.png) |
 
-## Where it works
+## WHERE IT WORKS
 
 - **Claude desktop app**, Code tab
 - **Claude Code in a terminal**
@@ -98,7 +98,7 @@ Collapsed:
 
 ![The band in the terminal, collapsed](docs/terminal-collapsed.png)
 
-## Install
+## INSTALL
 
 Needs **Claude Code 2.1.287 or later**, signed in with a **Pro or Max** plan.
 
@@ -192,7 +192,7 @@ claude plugin marketplace remove claude-code-usage-quota-mod
 
 </details>
 
-## Privacy
+## PRIVACY
 
 **Everything runs on your machine**, with the same access Claude Code has, like any mod, so read the code before installing any mod you don't trust. It **never sees your credentials** and sends nothing anywhere except the one request below.
 
@@ -208,7 +208,7 @@ claude plugin marketplace remove claude-code-usage-quota-mod
 
 </details>
 
-## Feedback and contributing
+## FEEDBACK AND CONTRIBUTING
 
 First release: I'd love to hear how it works for you. [Open an issue](https://github.com/anantraghunath/claude-code-usage-quota-mod/issues) for bugs or ideas. Pull requests welcome.
 
@@ -224,10 +224,10 @@ claude plugin test ./claude-code-usage-quota-mod
 
 **If you find it useful, a ⭐ helps others find it.**
 
-## Credits
+## CREDITS
 
 Inspired by [I'm liking the new mods feature](https://www.reddit.com/r/ClaudeCode/comments/1wwjman/im_liking_the_new_mods_feature/) on r/ClaudeCode. Thanks to [u/itsxzy](https://www.reddit.com/user/itsxzy/) for sharing the original prompt that started this project.
 
-## License
+## LICENSE
 
 [MIT](LICENSE) © 2026 Anant Raghunath
