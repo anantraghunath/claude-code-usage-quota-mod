@@ -127,7 +127,7 @@ The band appears once the plugins reload. If it doesn't, restart Claude Code.
 Either way installs it for **both** the desktop app and the terminal.
 
 > [!IMPORTANT]
-> **Installed before v0.1.5?** The plugin was renamed from `claude-code-usage-quota` to **`usage-quota`**, because Claude Code reserves names starting with `claude-` for Anthropic's own plugins. Updating won't pick up the new name, so remove the old one and install again.
+> **Installed before v0.1.5?** The plugin was renamed from `claude-code-usage-quota` to **`usage-quota`**, because Claude Code reserves names starting with `claude-` for Anthropic's own plugins. Updating won't pick up the new name, so remove the old one and install again. This gets you the latest version, **v0.1.6**.
 >
 > **Desktop app:** in the **Code** tab, send this as a message:
 >
