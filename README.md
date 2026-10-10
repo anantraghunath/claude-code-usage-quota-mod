@@ -94,12 +94,9 @@ In the terminal, **▲/▼** expands and collapses it. The `[-]` next to it is C
 
 ![The band in the terminal, expanded](docs/terminal-expanded.png)
 
-<details>
-<summary>Terminal, collapsed</summary>
+Collapsed:
 
 ![The band in the terminal, collapsed](docs/terminal-collapsed.png)
-
-</details>
 
 ## Install
 
