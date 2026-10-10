@@ -6,6 +6,8 @@
 
 The 5 Hour and Weekly limits are **your whole Claude account's**, including what you use in Claude chat and Cowork. The band itself shows in **Claude Code**: the desktop app and the terminal.
 
+**Live from the moment a session opens.** Many usage mods stay blank until Claude replies, because they only read the figures each reply carries. This one asks Anthropic's usage service straight away, so your limits are there as soon as the band appears, and it keeps them current every few seconds while you work.
+
 Type **`/quota`** to turn the band off and on.
 
 ## Expanded
