@@ -180,6 +180,101 @@ function headline(list: Forecast[], now: number): { text: string; color: string 
   }
 }
 
+// What the week leaves unused at this pace, and, once a window's worth of the week is
+// learned, what would use it. A 5 hour window
+// starts with a message, so idle time costs none: what expires is the weekly limit left
+// at its reset. The windows still to come: the rest of the running one, then as many as
+// start before the weekly reset, in every hour left (scheduled work runs at night too).
+// Warn from 10% of the week unused at this pace: less is too little to act on, and within
+// the forecast's own error. A fixed line, as the limits' amber and red are
+const UNUSED_WARN_AT = 10
+// once warning, it holds until the unused share falls below 8%, so it doesn't flicker
+const UNUSED_HOLD_AT = 8
+
+type Unused = {
+  /** % of the weekly limit unused at reset, at this pace */
+  lose: number
+  /** of that, what even full windows from now on can't use (0 until a window's worth is learned) */
+  outOfReach: number
+  /** of that, what full windows could still use */
+  save: number
+  /** the weekly % full windows from now on would end at */
+  reach: number
+  /** 5 hour windows left before the weekly reset, the running one included */
+  windows: number
+  /** how full each of them has to get to use what can still be used; none when no window is
+   * left, or before a window's worth is learned */
+  fill?: number
+}
+
+function unusedOf(week: Forecast, five: Forecast | undefined, now: number, perWindow?: number): Unused | null {
+  if (week.status !== 'ok') return null
+  const lose = Math.max(0, 100 - week.projected)
+  const left = 100 - week.percent
+  const isRunning = five !== undefined && (five.status === 'ok' || five.status === 'out')
+  // a 5 hour window running, or at its limit, holds the next one back until it resets
+  const from = five && (isRunning || five.status === 'hit') && Number.isFinite(five.resetsAt) ? Math.max(now, five.resetsAt) : now
+  // a window can start any time before the weekly reset, and a part of one still holds
+  // a whole one's use (the 5 hour limit caps how much, not how fast): so a part counts
+  const windows = Math.ceil(Math.max(0, week.resetsAt - from) / WINDOWS.five_hour!.ms) + (isRunning ? 1 : 0)
+  if (perWindow === undefined) return { lose, outOfReach: 0, save: lose, reach: 100, windows }
+  const used = isRunning ? five!.percent : 0
+  // the most the windows left can add to the week: each filled to 100%
+  const room = (perWindow / 100) * Math.max(0, 100 * windows - used)
+  const outOfReach = Math.min(lose, Math.max(0, left - room))
+  // what using the week takes, as 5 hour %s over the windows (the running one's already in)
+  const need = (Math.min(left, room) * 100) / perWindow + used
+  return {
+    lose,
+    outOfReach,
+    save: lose - outOfReach,
+    reach: Math.min(100, week.percent + room),
+    windows,
+    ...(windows > 0 ? { fill: need / windows } : {}),
+  }
+}
+
+// whether it is warning: a module value, so the warning holds between draws; a reload
+// starts it afresh
+let isWarning = false
+
+function warnsOf(unused: Unused | null): boolean {
+  isWarning = unused !== null && unused.lose >= (isWarning ? UNUSED_HOLD_AT : UNUSED_WARN_AT)
+  return isWarning
+}
+
+const windowsName = (n: number, which: 'next' | 'last') => (n === 1 ? `your ${which} window` : `your ${which} ${n} windows`)
+
+// the headline: the long form, or the short one where the long would wrap
+function unusedHeadline(u: Unused, isShort: boolean): string {
+  const lose = Math.round(u.lose)
+  const say = isShort ? `~${lose}% of your weekly limit will go unused.` : `At your pace ${lose}% of your weekly limit will go unused`
+  if (u.fill === undefined) return isShort ? say : `${say}.`
+  const fill = Math.round(u.fill)
+  if (Math.round(u.outOfReach) >= 1) {
+    const save = Math.round(u.save)
+    if (isShort) return save >= 1 ? `${say} Fill ${windowsName(u.windows, 'last')}.` : say
+    const lost = `${say} (${Math.round(u.outOfReach)}% out of reach).`
+    return save >= 1 ? `${lost} Fill ${windowsName(u.windows, 'last')} to save ${save}%.` : lost
+  }
+  return isShort
+    ? `${say} Fill ${u.windows === 1 ? 'your next window' : `${u.windows} windows`} to ~${fill}%.`
+    : `${say}. Fill ${windowsName(u.windows, 'next')} to ~${fill}% to use it.`
+}
+
+// the line under both columns, expanded: what using the week takes, against your usual
+function unusedAdvice(u: Unused, usualFill: number | undefined, isShort: boolean): string | undefined {
+  if (u.fill === undefined || Math.round(u.save) < 1) return undefined
+  const usual = usualFill === undefined ? '' : isShort ? ` (usually ${Math.round(usualFill)}%)` : ` (you usually reach ${Math.round(usualFill)}%)`
+  if (Math.round(u.outOfReach) >= 1) {
+    return isShort
+      ? `Max ${Math.round(u.reach)}%: fill ${windowsName(u.windows, 'last')}${usual}`
+      : `Most you can reach: ${Math.round(u.reach)}% – fill ${windowsName(u.windows, 'last')}${usual}`
+  }
+  const next = u.windows === 1 ? 'your next window' : `next ${u.windows} windows`
+  return `${isShort ? 'Use' : 'To use'} it all: ${next} to ~${Math.round(u.fill)}%${usual}`
+}
+
 function tokens(n: number): string {
   // 1M, not 1.0M; 1.5M keeps its decimal
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
@@ -462,7 +557,43 @@ async function limitsOf(
 // What the forecast learns, shared by every chat through the store: how far each past
 // window got (its peak, the last few kept), and the running one's peak and skipped %.
 type PaceWindow = { resetsAt: number; peak: number; skip: number }
-type PaceStore = { finals: Record<string, number[]>; windows: Record<string, PaceWindow> }
+// the last reading of both limits, in which windows, and what each has gained since learning began
+type PaceRatio = { five: number; week: number; fiveAt: number; weekAt: number; sumFive: number; sumWeek: number }
+type PaceStore = { finals: Record<string, number[]>; windows: Record<string, PaceWindow>; ratio?: PaceRatio }
+
+// How much of the week one full 5 hour window is: both limits count the same use, so
+// what the weekly % gained over what the 5 hour % gained, while both windows run on, is
+// it. Summed over readings, so whole-% rounding evens out; trusted from 20 points of 5
+// hour use; halved past 300 so it follows a change of plan.
+const RATIO_MIN = 20
+const RATIO_KEEP = 300
+
+function learnRatio(saved: PaceStore, limits: Limit[], now: number): boolean {
+  const five = limits.find(l => l.kind === 'five_hour')
+  const week = limits.find(l => l.kind === 'seven_day')
+  const fiveAt = five?.resetsAt ? Date.parse(five.resetsAt) : NaN
+  const weekAt = week?.resetsAt ? Date.parse(week.resetsAt) : NaN
+  if (!five || !week || !(fiveAt > now) || !(weekAt > now)) return false
+  const r = saved.ratio
+  if (!r || Math.abs(r.fiveAt - fiveAt) > SAME_WINDOW_MS || Math.abs(r.weekAt - weekAt) > SAME_WINDOW_MS) {
+    // a window began: start again from this reading, keeping what was learned
+    saved.ratio = { five: five.percentUsed, week: week.percentUsed, fiveAt, weekAt, sumFive: r?.sumFive ?? 0, sumWeek: r?.sumWeek ?? 0 }
+    return true
+  }
+  const gainFive = five.percentUsed - r.five
+  const gainWeek = week.percentUsed - r.week
+  // use only climbs: a reading behind the last one is stale
+  if (gainFive < 0 || gainWeek < 0 || (gainFive === 0 && gainWeek === 0)) return false
+  r.sumFive += gainFive
+  r.sumWeek += gainWeek
+  if (r.sumFive > RATIO_KEEP) {
+    r.sumFive /= 2
+    r.sumWeek /= 2
+  }
+  r.five = five.percentUsed
+  r.week = week.percentUsed
+  return true
+}
 
 // A chat reopened with a long history re-reads it all on its first reply: one big jump
 // in usage. Its first turn notes the limits it started from; the first new reading
@@ -498,7 +629,9 @@ function takeSpike(): Record<string, number> | undefined {
   return jump
 }
 
-async function trackPace($: EngineInterface, limits: Limit[], now: number): Promise<Record<string, PaceOf>> {
+type Paced = { pace: Record<string, PaceOf>; perWindow?: number; usualFill?: number }
+
+async function trackPace($: EngineInterface, limits: Limit[], now: number): Promise<Paced> {
   const spike = takeSpike()
   const saved = ((await storeGet($, 'pace')) as PaceStore | undefined) ?? { finals: {}, windows: {} }
   let isChanged = false
@@ -524,8 +657,11 @@ async function trackPace($: EngineInterface, limits: Limit[], now: number): Prom
     }
     pace[l.kind] = { typical: median(saved.finals[l.kind]) ?? TYPICAL_DEFAULT, skip: w.skip }
   }
+  if (learnRatio(saved, limits, now)) isChanged = true
   if (isChanged) await storeSet($, 'pace', saved)
-  return pace
+  const r = saved.ratio
+  const perWindow = r && r.sumFive >= RATIO_MIN && r.sumWeek > 0 ? (r.sumWeek / r.sumFive) * 100 : undefined
+  return { pace, perWindow, usualFill: median(saved.finals.five_hour) }
 }
 
 // The window is shown as three groups: Messages, Tools (System + MCP tools) and Other
@@ -909,7 +1045,7 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
         .map(c => ({ name: c.name, tokens: c.tokens, kind: c.kind as Category['kind'] })),
     ].filter(c => c.tokens > 0)
     const { limits, at: limitsAt, error: limitsError } = await limitsOf($, usage.rateLimits, now, ask)
-    const pace = await trackPace($, limits, now)
+    const { pace, perWindow, usualFill } = await trackPace($, limits, now)
     const next: Snapshot = {
       window: context.window,
       tokens: used,
@@ -920,6 +1056,8 @@ async function refresh($: EngineInterface, ask: Ask = 'no'): Promise<void> {
       ...(limitsAt !== undefined ? { limitsAt } : {}),
       ...(limitsError ? { limitsError } : {}),
       ...(Object.keys(pace).length > 0 ? { pace } : {}),
+      ...(perWindow !== undefined ? { perWindow } : {}),
+      ...(usualFill !== undefined ? { usualFill } : {}),
       // the minute, so countdowns and ages redraw even when nothing else moves
       minute: Math.floor(now / 60_000),
     }
@@ -1042,7 +1180,19 @@ export const register: Register = on => {
     // both windows always, once there is any reading: one the reading lacks is not running
     const known = snap.limits.length === 0 ? [] : Object.keys(WINDOWS).map(kind => snap.limits.find(l => l.kind === kind) ?? { kind, percentUsed: 0 })
     const list = known.map(l => forecast(l, now, snap.pace?.[l.kind])).filter((f): f is Forecast => f !== null)
-    const head = headline(list, now)
+    // on track, but on pace to leave a window's worth of the week or more unused: say what
+    // you'll lose instead (running out, or a limit reached, still leads)
+    const week = list.find(f => f.kind === 'seven_day')
+    const unused = week ? unusedOf(week, list.find(f => f.kind === 'five_hour'), now, snap.perWindow) : null
+    const isUnused = week !== undefined && warnsOf(unused) && !list.some(f => f.status === 'hit' || f.status === 'out')
+    // the desktop's letters are narrower than its cells: about 0.8 of one
+    const fits = (text: string) => text.length * (Svg ? 0.8 : 1) <= width
+    const head =
+      isUnused && unused
+        ? { text: fits(unusedHeadline(unused, false)) ? unusedHeadline(unused, false) : unusedHeadline(unused, true), color: AMBER }
+        : headline(list, now)
+    const advice = isUnused && unused ? (unusedAdvice(unused, snap.usualFill, false) ?? '') : ''
+    const adviceText = advice && !fits(advice) ? (unusedAdvice(unused!, snap.usualFill, true) ?? advice) : advice
     // free as /context has it: the window less what is used and the autocompact buffer
     const buffer = snap.categories.find(c => c.kind === 'buffer')?.tokens ?? 0
     const free = Math.max(0, snap.window - snap.tokens - buffer)
@@ -1193,10 +1343,25 @@ export const register: Register = on => {
           })}
         </Box>
       )
-    const limitSegments = (f: Forecast) => [
-      { color: f.color, share: Math.min(100, f.percent) },
-      { color: TRACK, share: Math.max(0, 100 - f.percent) },
-    ]
+    const limitSegments = (f: Forecast) => {
+      const used = Math.min(100, f.percent)
+      if (!(isUnused && unused && f.kind === 'seven_day')) {
+        return [
+          { color: f.color, share: used },
+          { color: TRACK, share: Math.max(0, 100 - used) },
+        ]
+      }
+      // past the forecast tick: pale amber for what you'd lose but could still use,
+      // grey for what full windows can't reach
+      const pace = Math.max(used, Math.min(100, f.projected))
+      const reach = Math.max(pace, unused.reach)
+      return [
+        { color: f.color, share: used },
+        { color: TRACK, share: pace - used },
+        { color: `${AMBER}59`, share: reach - pace },
+        { color: BUFFER, share: 100 - reach },
+      ]
+    }
     // the bar in three colours: Messages, Tools, and one light grey run for Other and
     // the autocompact buffer together (drawn as one, no seam between them); then free.
     // Always in that order, so Other sits against the buffer
@@ -1417,6 +1582,14 @@ export const register: Register = on => {
             {contextBlock}
           </Box>
         )}
+
+        {/* what using the week takes: across both columns, on one line where it fits
+            (the short form where the long won't), wrapped where even that won't */}
+        {!collapsed && adviceText ? (
+          <Box marginTop={gap}>
+            <Text color={AMBER} wrap="wrap">{adviceText}</Text>
+          </Box>
+        ) : null}
       </Box>
     )
   })

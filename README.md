@@ -43,6 +43,18 @@ On course to run out, it warns you and says **when you'll hit the limit**:
 
 ![The band, collapsed, on course to run out](docs/run-out-collapsed-v2.png)
 
+On course to leave **10% or more of your weekly limit unused**, it says how much, and what would use it before the weekly reset:
+
+![The band, expanded, on course to leave 32% of the weekly limit unused](docs/unused-expanded.png)
+
+![The band, collapsed, on course to leave 32% of the weekly limit unused](docs/unused-collapsed.png)
+
+- A 5 hour window starts with your first message, so idle time costs nothing: what expires is the **weekly limit left at its reset**.
+- The **windows left** count every hour to the weekly reset, nights included (scheduled work runs then too).
+- **How much of your week one window is worth** is learned from how your 5 Hour and Weekly %s climb together, so it fits your plan. Until it's learned, the headline says what will go unused, without the advice.
+- Expanded, a line under the columns says what using it all takes, against how full your windows usually get. What even full windows can't reach is **out of reach**, grey on the bar.
+- Under 10% unused, the headline stays *On track*.
+
 **Context window**
 - The % used and space free, as `/context` counts it, split into Messages, Tools and Other.
 - **Amber at 50%**, **red at 80%**: the point to compact.

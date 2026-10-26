@@ -14,6 +14,10 @@ export type Snapshot = {
   limitsError?: string
   /** per window kind: the usual final % and the one-off % left out of the pace */
   pace?: Record<string, PaceOf>
+  /** the weekly % one full 5 hour window is worth, once learned from the readings */
+  perWindow?: number
+  /** how full a 5 hour window usually gets: the median of past windows' peaks */
+  usualFill?: number
   /** the minute it was taken in: redraws countdowns at least once a minute */
   minute?: number
 }

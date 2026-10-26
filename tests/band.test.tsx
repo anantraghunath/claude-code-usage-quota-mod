@@ -94,7 +94,9 @@ test('draws the band on track', async ($, on) => {
 
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: PROPS })
-    expect(await ui.find({ text: /^On track\. You should reach Wednesday's reset with room to spare\.$/ })).toBeDefined()
+    // on pace for 81%: 19% of the week would go unused, so the headline says so (no advice
+    // until a window's worth of the week is learned)
+    expect(await ui.find({ text: "At your pace 19% of your weekly limit will go unused." })).toBeDefined()
     expect(await ui.find({ text: '16% used' })).toBeDefined()
     expect(await ui.find({ text: '809k free of 1M' })).toBeDefined()
     expect(await ui.find({ text: 'Messages' })).toBeDefined()
@@ -244,7 +246,8 @@ test('a fresh session shows the last saved limits until its first reply', async 
     expect(await ui.find({ text: '5 Hour' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: '0%' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'starts with your next message' })).toBeDefined()
-    expect(await ui.find({ text: /^On track\./ })).toBeDefined()
+    // 6% four days in: most of the week would go unused
+    expect(await ui.find({ text: /^At your pace \d+% of your weekly limit will go unused\.$/ })).toBeDefined()
     await ui.unmount()
   }
 })
@@ -538,7 +541,7 @@ test('the arrow collapses the band to one row of three bars, and back', async ($
     expect(await ui.find({ type: 'Button', label: '▼' })).toBeDefined()
     await ui.press({ key: 'collapse' })
     // the headline and Compact stay; the notes and categories go
-    expect(await ui.find({ text: /^On track\./ })).toBeDefined()
+    expect(await ui.find({ text: /^At your pace \d+% of your weekly limit will go unused/ })).toBeDefined()
     expect(await ui.find({ type: 'Button', label: 'Compact' })).toBeDefined()
     expect(await ui.find({ type: 'Button', label: '▲' })).toBeDefined()
     // the limits by short name, each with the time to its reset, in grey
@@ -836,7 +839,7 @@ test('a narrow chat stacks the band and wraps its text, nothing cut off or dropp
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 38 } })
     // the headline wraps, never truncated
-    const head = await ui.find({ type: 'Text', text: /^On track\./ })
+    const head = await ui.find({ type: 'Text', text: /\d+% of your weekly limit will go unused/ })
     expect(head?.props.wrap).toBe('wrap')
     for (const text of ['5 Hour', 'Weekly', 'Context', 'Messages', 'Tools', 'Other']) expect(await ui.find({ text })).toBeDefined()
     expect(await ui.find({ type: 'Button', label: 'Compact' })).toBeDefined()
@@ -860,7 +863,7 @@ test('the desktop in light mode draws in the light palette', async ($, on) => {
   await clock.advance(2_000)
   const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   // green text a shade deeper than the green bars, to read on the pale band
-  expect((await ui.find({ type: 'Text', text: /^On track\./ }))?.props.color).toBe('#16a34a')
+  expect((await ui.find({ type: 'Text', text: '16% used' }))?.props.color).toBe('#16a34a')
   const weeklyBar = (await ui.findAll({ type: 'Svg' })).find(svg => /^Weekly/.test(String(svg.props.alt)))
   expect(String(weeklyBar?.props.source)).toContain('fill="#22b856"')
   const before = reads
@@ -993,7 +996,7 @@ test('a limit bar and its % turn amber from 75% used and red from 90%, even on t
     await clock.advance(1_000)
     await $.session.measure(MEASURE)
     const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
-    expect(await ui.find({ text: /^On track\./ })).toBeDefined()
+    expect(await ui.find({ text: /run out/ })).toBeUndefined()
     expect((await ui.find({ type: 'Text', text: `${percent}%` }))?.props.color).toBe(color)
     await ui.unmount()
   }
@@ -1016,4 +1019,230 @@ test('Context turns amber from 50% and red from 80%', async ($, on) => {
     expect((await ui.find({ type: 'Text', text: `${percent}% used` }))?.props.color).toBe(color)
     await ui.unmount()
   }
+})
+
+// A week on pace to leave some of the weekly limit unused. Learned: a full 5 hour window
+// is 12% of the week (sumWeek over sumFive), and windows usually get to 35%.
+function unusedWorld(on: On, rateLimits: SessionRateLimit[], learned = true) {
+  const clock = mock.clock(on, { now: NOW })
+  const at = (kind: string) => Date.parse(rateLimits.find(l => l.kind === kind)?.resetsAt ?? '')
+  const find = (kind: string) => rateLimits.find(l => l.kind === kind)?.percentUsed ?? 0
+  const ratio = { five: find('five_hour'), week: find('seven_day'), fiveAt: at('five_hour'), weekAt: at('seven_day'), sumFive: 100, sumWeek: 12 }
+  mock.store(on, { pace: { finals: { five_hour: [35, 35, 35] }, windows: {}, ...(learned ? { ratio } : {}) } })
+  on('session.usage', () => ({ value: usage(rateLimits) }))
+  answerRest(on, [])
+  return clock
+}
+
+const FALLING_SHORT = [
+  { kind: 'five_hour', percentUsed: 13, resetsAt: iso(HOUR + 3 * MIN) },
+  { kind: 'seven_day', percentUsed: 36, resetsAt: iso(2 * 24 * HOUR + 12 * HOUR) },
+]
+
+test('on pace to leave a window or more of the week unused, the headline says what you will lose and how to use it', async ($, on) => {
+  const clock = unusedWorld(on, FALLING_SHORT)
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ plugin: 'usage-quota', surface, component: 'AbovePrompt', props: PROPS })
+    // 13 windows left before the reset (the running one and 12 more): 64% left takes each to ~42%
+    const head = "At your pace 45% of your weekly limit will go unused. Fill your next 13 windows to ~42% to use it."
+    expect((await ui.find({ type: 'Text', text: head }))?.props.color).toBe('#fbbf24')
+    expect(await ui.find({ text: 'To use it all: next 13 windows to ~42% (you usually reach 35%)' })).toBeDefined()
+    // the forecast line under Weekly is as it was
+    expect(await ui.find({ text: /^On pace for about 55% by reset/ })).toBeDefined()
+    if (surface === 'desktop') {
+      // the weekly bar shades what you would lose in pale amber
+      const weekly = (await ui.findAll({ type: 'Svg' })).find(svg => /^Weekly/.test(String(svg.props.alt)))
+      expect(String(weekly?.props.source)).toContain('fill="#fbbf2459"')
+    }
+    await ui.unmount()
+  }
+})
+
+test('with part of the week out of reach, it says how much, and what the last windows can still save', async ($, on) => {
+  const clock = unusedWorld(on, [
+    { kind: 'five_hour', percentUsed: 13, resetsAt: iso(HOUR + 3 * MIN) },
+    { kind: 'seven_day', percentUsed: 20, resetsAt: iso(10 * HOUR) },
+  ])
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 140 } })
+  expect(
+    await ui.find({ text: "At your pace 78% of your weekly limit will go unused (46% out of reach). Fill your last 3 windows to save 33%." }),
+  ).toBeDefined()
+  expect(await ui.find({ text: 'Most you can reach: 54% – fill your last 3 windows (you usually reach 35%)' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('less than a window of the week unused keeps the on track headline', async ($, on) => {
+  const clock = unusedWorld(on, [
+    { kind: 'five_hour', percentUsed: 13, resetsAt: iso(HOUR + 3 * MIN) },
+    { kind: 'seven_day', percentUsed: 92, resetsAt: iso(3 * HOUR) },
+  ])
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  expect(await ui.find({ text: /^On track\./ })).toBeDefined()
+  expect(await ui.find({ text: /lose|To use it all/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test("before a window's worth is learned, it says what you will lose, without advice", async ($, on) => {
+  const clock = unusedWorld(on, FALLING_SHORT, false)
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  expect(await ui.find({ text: "At your pace 45% of your weekly limit will go unused." })).toBeDefined()
+  expect(await ui.find({ text: /windows/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('early in the week the forecast leans on how far your weeks usually get: a week that usually ends full does not warn', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  // 7% twelve hours in; past weeks ran to 100%
+  mock.store(on, { pace: { finals: { seven_day: [100, 100, 100] }, windows: {} } })
+  on('session.usage', () => ({
+    value: usage([
+      { kind: 'five_hour', percentUsed: 13, resetsAt: iso(HOUR + 3 * MIN) },
+      { kind: 'seven_day', percentUsed: 7, resetsAt: iso(6 * 24 * HOUR + 12 * HOUR) },
+    ]),
+  }))
+  answerRest(on, [])
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  expect(await ui.find({ text: /^On track\./ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('collapsed, the warning stays in the headline and the line under the columns goes', async ($, on) => {
+  const clock = unusedWorld(on, FALLING_SHORT)
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  await ui.press({ key: 'collapse' })
+  expect(await ui.find({ text: /^At your pace 45% of your weekly limit will go unused/ })).toBeDefined()
+  expect(await ui.find({ text: /^To use it all/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test("a window's worth of the week is learned from how both limits climb together", async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  mock.store(on)
+  const state = { five: 10, week: 30 }
+  on('session.usage', () => ({
+    value: usage([
+      { kind: 'five_hour', percentUsed: state.five, resetsAt: iso(4 * HOUR) },
+      { kind: 'seven_day', percentUsed: state.week, resetsAt: iso(3 * 24 * HOUR) },
+    ]),
+  }))
+  answerRest(on, [])
+  await $.session.measure(MEASURE)
+  // 5 hour 10% to 30% while weekly 30% to 32.4%: a full window is 12% of the week
+  await clock.advance(10 * MIN)
+  state.five = 30
+  state.week = 32.4
+  await $.session.measure(MEASURE)
+  // weekly 32% with 3 days left: on pace to lose a window's worth or more, so it warns,
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  expect(await ui.find({ text: /^At your pace \d+% of your weekly limit will go unused\./ })).toBeDefined()
+  expect(await ui.find({ text: /^To use it all: next \d+ windows to ~\d+%$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a narrow band takes the short headline and the short line under the columns', async ($, on) => {
+  const clock = unusedWorld(on, FALLING_SHORT)
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'terminal', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 60 } })
+  expect(await ui.find({ text: "~45% of your weekly limit will go unused. Fill 13 windows to ~42%." })).toBeDefined()
+  expect(await ui.find({ text: 'Use it all: next 13 windows to ~42% (usually 35%)' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the last hours before the weekly reset still hold a window', async ($, on) => {
+  // no 5 hour window running, 4 hours to the weekly reset: one more window can start
+  const clock = unusedWorld(on, [
+    { kind: 'five_hour', percentUsed: 0, resetsAt: iso(-HOUR) },
+    { kind: 'seven_day', percentUsed: 60, resetsAt: iso(4 * HOUR) },
+  ])
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 140 } })
+  expect(
+    await ui.find({ text: "At your pace 39% of your weekly limit will go unused (28% out of reach). Fill your last window to save 11%." }),
+  ).toBeDefined()
+  expect(await ui.find({ text: 'Most you can reach: 72% – fill your last window (you usually reach 35%)' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a band too narrow even for the short line wraps it, nothing cut off', async ($, on) => {
+  const clock = unusedWorld(on, FALLING_SHORT)
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'terminal', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 30 } })
+  expect((await ui.find({ type: 'Text', text: 'Use it all: next 13 windows to ~42% (usually 35%)' }))?.props.wrap).toBe('wrap')
+  await ui.unmount()
+})
+
+test("learning a window's worth skips a stale reading and carries on across a 5 hour reset", async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  mock.store(on)
+  const state = { five: 10, week: 30, fiveAt: iso(4 * HOUR) }
+  on('session.usage', () => ({
+    value: usage([
+      { kind: 'five_hour', percentUsed: state.five, resetsAt: state.fiveAt },
+      { kind: 'seven_day', percentUsed: state.week, resetsAt: iso(3 * 24 * HOUR) },
+    ]),
+  }))
+  answerRest(on, [])
+  const read = async (five: number, week: number, wait: number) => {
+    await clock.advance(wait)
+    Object.assign(state, { five, week })
+    await $.session.measure(MEASURE)
+  }
+  await $.session.measure(MEASURE)
+  // 20 points of 5 hour use for 2.4 of the week: 12% a window
+  await read(30, 32.4, 10 * MIN)
+  // a stale 5 hour figure: left out, or it would skew the ratio
+  await read(25, 33, 10 * MIN)
+  // the 5 hour window resets; the next one adds 10 points for 1.2 more: still 12%
+  state.fiveAt = new Date(NOW + 4 * HOUR + MIN + 5 * HOUR).toISOString()
+  await read(2, 33, 4 * HOUR + MIN - 20 * MIN)
+  await read(12, 34.2, 10 * MIN)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  // 65.8% left over 14 windows (the running one at 12% and 13 more) at 12% each: ~40%
+  expect(await ui.find({ text: 'To use it all: next 14 windows to ~40% (you usually reach 30%)' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('every hour to the weekly reset counts, night included: scheduled work runs then too', async ($, on) => {
+  // 50% left, 20 hours to the weekly reset: 5 windows (the running one at 13% and 4 more),
+  // night hours included, hold it all, so none of it is out of reach
+  const clock = unusedWorld(on, [
+    { kind: 'five_hour', percentUsed: 13, resetsAt: iso(HOUR + 3 * MIN) },
+    { kind: 'seven_day', percentUsed: 50, resetsAt: iso(20 * HOUR) },
+  ])
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: { ...PROPS, bodyColumns: 140 } })
+  expect(await ui.find({ text: "At your pace 43% of your weekly limit will go unused. Fill your next 5 windows to ~86% to use it." })).toBeDefined()
+  expect(await ui.find({ text: /out of reach/ })).toBeUndefined()
+  expect(await ui.find({ text: 'To use it all: next 5 windows to ~86% (you usually reach 35%)' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('it warns from 10% of the week unused, whatever a window is worth', async ($, on) => {
+  // 83% used, 12 hours to the weekly reset: on pace for about 89%, 11% unused. Less than
+  // one 12% window, but past the 10% line
+  const clock = unusedWorld(on, [
+    { kind: 'five_hour', percentUsed: 13, resetsAt: iso(HOUR + 3 * MIN) },
+    { kind: 'seven_day', percentUsed: 83, resetsAt: iso(12 * HOUR) },
+  ])
+  await clock.advance(1)
+  await $.session.measure(MEASURE)
+  const ui = await $.ui.mount({ plugin: 'usage-quota', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+  expect(await ui.find({ text: /^At your pace 11% of your weekly limit will go unused\. Fill your next 4 windows to ~\d+% to use it\.$/ })).toBeDefined()
+  await ui.unmount()
 })
